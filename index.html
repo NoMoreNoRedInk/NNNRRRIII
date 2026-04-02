@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Grammar Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f2f2f7;
+    }
+
+    .app {
+      max-width: 500px;
+      margin: auto;
+      padding: 15px;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: #007AFF;
+      color: white;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+
+    .choice {
+      padding: 10px;
+      border-radius: 10px;
+      margin: 5px 0;
+    }
+
+    .correct {
+      background: #d4f8d4;
+      color: green;
+      font-weight: bold;
+    }
+
+    .wrong {
+      background: #ffe0e0;
+      color: red;
+    }
+
+    .label {
+      font-weight: bold;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+  <h2>Smart Grammar Helper</h2>
+
+  <div class="card">
+    <textarea id="input" placeholder="Example:
+She ___ to school go goes going went"></textarea>
+    <button onclick="analyzeText()">Analyze</button>
+  </div>
+
+  <div id="output"></div>
+</div>
+
+<script>
+function detectChoices(sentence) {
+  let words = sentence.replace(/[.,!?]/g,"").split(" ");
+  let index = words.indexOf("___");
+
+  if (index === -1) return [...new Set(words.slice(-5))];
+  return [...new Set(words.slice(index + 1))];
+}
+
+function evaluateSentence(sentence, choice) {
+  let test = sentence.replace("___", choice.toLowerCase());
+  let score = 0;
+
+  // ===== STRONG CORRECT PATTERNS =====
+  if (/he goes|she goes|it goes/.test(test)) score += 6;
+  if (/they are|we are|you are/.test(test)) score += 6;
+  if (/i am/.test(test)) score += 6;
+
+  if (/is going|are going|was going|were going/.test(test)) score += 5;
+  if (/has gone|have gone/.test(test)) score += 5;
+
+  // ===== STRONG WRONG PATTERNS =====
+  if (/he go\b|she go\b|it go\b/.test(test)) score -= 6;
+  if (/they is\b|we is\b/.test(test)) score -= 6;
+  if (/i are\b/.test(test)) score -= 6;
+  if (/is are|are is/.test(test)) score -= 5;
+
+  // ===== SUBJECT-VERB AGREEMENT =====
+  if (/he|she|it/.test(test)) {
+    if (choice.endsWith("s")) score += 2;
+    else score -= 1;
+  }
+
+  if (/they|we|you/.test(test)) {
+    if (!choice.endsWith("s")) score += 2;
+    else score -= 1;
+  }
+
+  // ===== TENSE DETECTION =====
+  if (/yesterday|last|ago/.test(test)) {
+    if (/ed\b/.test(choice) || ["was","were","went","did"].includes(choice)) {
+      score += 4;
+    } else {
+      score -= 2;
+    }
+  }
+
+  if (/now|today|currently/.test(test)) {
+    if (["is","are","am"].includes(choice)) score += 3;
+  }
+
+  // ===== CONTINUOUS TENSE =====
+  if (/___ going|___ running|___ eating/.test(sentence)) {
+    if (["is","are","was","were","am"].includes(choice)) score += 4;
+  }
+
+  // ===== MODAL VERBS =====
+  if (/can|will|should|would|could/.test(test)) {
+    if (choice.endsWith("s")) score -= 3;
+  }
+
+  // ===== DOUBLE WORD / WEIRD STRUCTURE =====
+  if (/(\b\w+\b)\s+\1/.test(test)) score -= 3;
+
+  // ===== BASIC FLUENCY BONUS =====
+  if (/^[A-Z]/.test(test)) score += 1;
+  if (test.split(" ").length > 3) score += 1;
+
+  return score;
+}
+
+function analyzeText() {
+  let text = document.getElementById("input").value;
+  let sentences = text.match(/[^.!?]+[.!?]?/g) || [text];
+
+  let html = "";
+
+  sentences.forEach(sentence => {
+    let choices = detectChoices(sentence);
+    if (choices.length < 2) return;
+
+    let scored = choices.map(choice => ({
+      choice,
+      score: evaluateSentence(sentence, choice)
+    }));
+
+    // 🔥 FIXED SORT (NO MORE FIRST-ANSWER BUG)
+    scored.sort((a,b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.choice.length - a.choice.length;
+    });
+
+    let best = scored[0].choice;
+
+    html += `<div class="card">`;
+    html += `<div class="label">Sentence</div>${sentence}<br><br>`;
+
+    html += `<div class="label">Choices</div>`;
+    scored.forEach(c => {
+      if (c.choice === best) {
+        html += `<div class="choice correct">✔ ${c.choice}</div>`;
+      } else {
+        html += `<div class="choice wrong">✖ ${c.choice}</div>`;
+      }
+    });
+
+    html += `</div>`;
+  });
+
+  document.getElementById("output").innerHTML = html;
+}
+</script>
+
+</body>
+</html>
